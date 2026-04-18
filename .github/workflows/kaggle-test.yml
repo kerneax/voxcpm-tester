@@ -28,35 +28,38 @@ jobs:
           pip install kaggle
           sudo apt-get install jq -y
 
-      - name: Authenticate Kaggle
+      - name: Delete Temp Kernel
         run: |
-          export KAGGLE_API_TOKEN=$KAGGLE_API_TOKEN
+          kaggle kernels delete "${KAGGLE_USERNAME}/${KERNEL_SLUG}_temp" -y || echo "Temp kernel not found or already deleted."
 
       - name: Pull Latest Notebook
         id: pull_step
         run: |
           if kaggle kernels pull -p ./ "$KERNEL_SLUG"; then
-            # 获取拉取到的 .ipynb 文件名（取第一个找到的文件）
+            # 获取拉取到的 .ipynb 文件名
             FETCHED_FILE=$(ls *.ipynb | head -n 1)
             echo "pushed_file=$FETCHED_FILE" >> $GITHUB_OUTPUT
             echo "Successfully pulled: $FETCHED_FILE"
           else
-            echo "Kernel not found on Kaggle.
+            echo "Kernel not found on Kaggle."
             exit 1
           fi
 
       - name: Create Kernel Metadata
         run: |
-          # 使用上一步获取到的文件名 $FETCHED_FILE
           FETCHED_FILE="${{ steps.pull_step.outputs.pushed_file }}"
           
+          TEMP_ID="${KAGGLE_USERNAME}/${KERNEL_SLUG}_temp"
+          TEMP_TITLE="${KERNEL_SLUG}_temp"
+          
           jq -n \
-            --arg id "$KERNEL_SLUG" \
+            --arg id "$TEMP_ID" \
+            --arg title "$TEMP_TITLE" \
             --arg dataset "$KERNEL_DATASET" \
             --arg code_file "$FETCHED_FILE" \
             '{
               "id": $id,
-              "title": ($id | split("/") | .[1]),
+              "title": $title,
               "code_file": $code_file,
               "language": "python",
               "kernel_type": "notebook",
@@ -70,36 +73,9 @@ jobs:
               "model_sources": []
             }' > kernel-metadata.json
           
-          echo "Generated kernel-metadata.json with code_file: $FETCHED_FILE"
+          echo "Generated kernel-metadata.json with ID: $TEMP_ID"
 
       - name: Push and Run Notebook
         run: |
           kaggle kernels push -p ./ -t 15300
-
-      - name: Monitor Kernel Status
-        run: |
-          echo "Starting monitoring for $KERNEL_SLUG..."
-          MAX_RUNTIME=15300 
-          START_TIME=$(date +%s)
-          
-          while true; do
-            STATUS_OUTPUT=$(kaggle kernels status $KERNEL_SLUG)
-            echo "$STATUS_OUTPUT"
-            
-            if [[ "$STATUS_OUTPUT" == *"has status \"complete\""* ]]; then
-              echo "✅ Finished successfully!"
-              break
-            elif [[ "$STATUS_OUTPUT" == *"has status \"error\""* ]]; then
-              echo "❌ Error detected! Fetching logs..."
-              kaggle kernels output $KERNEL_SLUG -p ./error_logs
-              cat ./error_logs/*.log || echo "No log files found."
-              exit 1
-            fi
-            
-            if [ $(($(date +%s) - START_TIME)) -gt $MAX_RUNTIME ]; then
-              echo "⏳ Timeout (4h) reached."
-              exit 1
-            fi
-            
-            sleep 300
-          done
+          echo "Done."
