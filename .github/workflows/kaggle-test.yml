@@ -30,7 +30,7 @@ jobs:
 
       - name: Delete Temp Kernel
         run: |
-          kaggle kernels delete "${KAGGLE_USERNAME}/${KERNEL_SLUG}_temp" -y || echo "Temp kernel not found or already deleted."
+          kaggle kernels delete "${KAGGLE_USERNAME}/${KERNEL_SLUG}-temp" -y || echo "Temp kernel not found or already deleted."
 
       - name: Pull Latest Notebook
         id: pull_step
@@ -49,8 +49,8 @@ jobs:
         run: |
           FETCHED_FILE="${{ steps.pull_step.outputs.pushed_file }}"
           
-          TEMP_ID="${KAGGLE_USERNAME}/${KERNEL_SLUG}_temp"
-          TEMP_TITLE="${KERNEL_SLUG}_temp"
+          TEMP_ID="${KAGGLE_USERNAME}/${KERNEL_SLUG}-temp"
+          TEMP_TITLE="${KERNEL_SLUG}-temp"
           
           jq -n \
             --arg id "$TEMP_ID" \
