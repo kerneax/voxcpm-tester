@@ -1,0 +1,105 @@
+name: Kaggle Test
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # 新加坡时间 20:00
+  workflow_dispatch:
+
+jobs:
+  kaggle-task:
+    runs-on: ubuntu-latest
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KERNEL_SLUG: ${{ secrets.KERNEL_SLUG }}
+      KERNEL_DATASET: ${{ secrets.KERNEL_DATASET }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install kaggle
+          sudo apt-get install jq -y
+
+      - name: Authenticate Kaggle
+        run: |
+          export KAGGLE_API_TOKEN=$KAGGLE_API_TOKEN
+
+      - name: Pull Latest Notebook
+        id: pull_step
+        run: |
+          if kaggle kernels pull -p ./ "$KERNEL_SLUG"; then
+            # 获取拉取到的 .ipynb 文件名（取第一个找到的文件）
+            FETCHED_FILE=$(ls *.ipynb | head -n 1)
+            echo "pushed_file=$FETCHED_FILE" >> $GITHUB_OUTPUT
+            echo "Successfully pulled: $FETCHED_FILE"
+          else
+            echo "Kernel not found on Kaggle.
+            exit 1
+          fi
+
+      - name: Create Kernel Metadata
+        run: |
+          # 使用上一步获取到的文件名 $FETCHED_FILE
+          FETCHED_FILE="${{ steps.pull_step.outputs.pushed_file }}"
+          
+          jq -n \
+            --arg id "$KERNEL_SLUG" \
+            --arg dataset "$KERNEL_DATASET" \
+            --arg code_file "$FETCHED_FILE" \
+            '{
+              "id": $id,
+              "title": ($id | split("/") | .[1]),
+              "code_file": $code_file,
+              "language": "python",
+              "kernel_type": "notebook",
+              "is_private": "true",
+              "enable_gpu": "true",
+              "enable_tpu": "false",
+              "enable_internet": "true",
+              "dataset_sources": (if $dataset == "" then [] else [$dataset] end),
+              "competition_sources": [],
+              "kernel_sources": [],
+              "model_sources": []
+            }' > kernel-metadata.json
+          
+          echo "Generated kernel-metadata.json with code_file: $FETCHED_FILE"
+
+      - name: Push and Run Notebook
+        run: |
+          kaggle kernels push -p ./ -t 15300
+
+      - name: Monitor Kernel Status
+        run: |
+          echo "Starting monitoring for $KERNEL_SLUG..."
+          MAX_RUNTIME=15300 
+          START_TIME=$(date +%s)
+          
+          while true; do
+            STATUS_OUTPUT=$(kaggle kernels status $KERNEL_SLUG)
+            echo "$STATUS_OUTPUT"
+            
+            if [[ "$STATUS_OUTPUT" == *"has status \"complete\""* ]]; then
+              echo "✅ Finished successfully!"
+              break
+            elif [[ "$STATUS_OUTPUT" == *"has status \"error\""* ]]; then
+              echo "❌ Error detected! Fetching logs..."
+              kaggle kernels output $KERNEL_SLUG -p ./error_logs
+              cat ./error_logs/*.log || echo "No log files found."
+              exit 1
+            fi
+            
+            if [ $(($(date +%s) - START_TIME)) -gt $MAX_RUNTIME ]; then
+              echo "⏳ Timeout (4h) reached."
+              exit 1
+            fi
+            
+            sleep 300
+          done
