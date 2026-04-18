@@ -1,16 +1,16 @@
-name: Kaggle Test
+name: Kaggle Test 21-01
 
 on:
   schedule:
-    - cron: '0 12 * * *' # 新加坡时间 20:00
+    - cron: '0 13 * * *' # 新加坡时间 21:00
   workflow_dispatch:
 
 jobs:
   kaggle-task:
     runs-on: ubuntu-latest
     env:
-      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME_21_01 }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN_21_01 }}
       KERNEL_SLUG: ${{ secrets.KERNEL_SLUG }}
       KERNEL_DATASET: ${{ secrets.KERNEL_DATASET }}
 
