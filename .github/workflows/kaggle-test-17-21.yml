@@ -1,8 +1,8 @@
 name: Kaggle Test 17-21
 
 on:
-  schedule:
-    - cron: '45 8 * * *' # 新加坡时间 16:45
+#  schedule:
+#    - cron: '45 8 * * *' # 新加坡时间 16:45
   workflow_dispatch:
 
 jobs:
